@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Granny / Waterballz Gamezz</title>
+    <meta name="robots" content="noindex, nofollow">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <!-- keep existing external assets/hooks -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/TemplateData/style.css">
+    <script id="gamemonetize-sdk" src="https://cdn.jsdelivr.net/gh/testamalame/sef@main/sedk.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/sdk.js"></script>
+
+    <script type="text/javascript">
+        // Keep SDK options (unchanged behavior)
+        window.SDK_OPTIONS = {
+            gameId: "jp112o3o4hzgrnc7zaewjkrfk282pul8",
+            onEvent: function (a) {
+                switch (a.name) {
+                    case "SDK_GAME_PAUSE":
+                        console.log("Oyun duraklatıldı, ses kapatılıyor...");
+                        if (typeof myGameInstance !== 'undefined' && myGameInstance) {
+                            myGameInstance.SendMessage('AudioManager', 'MuteAudio');
+                        }
+                        break;
+                    case "SDK_GAME_START":
+                        console.log("Reklam bitti, oyun devam ediyor...");
+                        if (typeof myGameInstance !== 'undefined' && myGameInstance) {
+                            myGameInstance.SendMessage('AudioManager', 'UnmuteAudio');
+                        }
+                        break;
+                    case "SDK_READY":
+                        console.log("SDK hazır.");
+                        break;
+                }
+            }
+        };
+        (function (a, b, c) {
+            var d = a.getElementsByTagName(b)[0];
+            a.getElementById(c) || (a = a.createElement(b), a.id = c, a.src = "https://cdn.jsdelivr.net/gh/testamalame/sef@main/sedk.js", d.parentNode.insertBefore(a, d));
+        })(document, "script", "gamemonetize-sdk");
+    </script>
+
+    <style>
+        /* Ensure page fills the viewport */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+
+        /* Background kept from original for visual continuity */
+        body {
+            background: url('https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/background.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        /* Unity container */
+        #unity-container { position: absolute; width: 100%; height: 100%; left: 0; top: 0; }
+
+        /* Existing Unity loading bar (we keep it functional but hidden behind our custom loader) */
+        #unity-loading-bar { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; height: 20px; background: rgba(0,0,0,0.5); border: 2px solid #fff; border-radius: 10px; display: none; }
+        #unity-logo { position: absolute; top: calc(50% - 100px); left: 50%; transform: translateX(-50%); width: 200px; height: auto; }
+        #unity-logo img { max-width: 100%; height: auto; }
+        #unity-progress-bar-empty { width: 100%; height: 100%; position: relative; }
+        #unity-progress-bar-full { position: absolute; top: 0; left: 0; width: 0%; height: 100%; background: #4caf50; border-radius: 8px; transition: width 0.2s ease; }
+        #unity-warning { position: absolute; left: 50%; top: 5%; transform: translateX(-50%); background: white; padding: 10px; display: none; border: 1px solid #ccc; border-radius: 5px; }
+
+        /* CUSTOM purple overlay loader */
+        #custom-loader {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg,#caa3ff 0%, #a768ff 100%); /* pleasant purple */
+            color: #ffffff;
+            font-family: 'Segoe UI', Roboto, Fantasy, sans-serif;
+            font-size: 56px;
+            z-index: 99999;
+            flex-direction: column;
+            text-align: center;
+        }
+        #custom-loader .title { font-weight: 700; letter-spacing: 1px; }
+        #custom-loader .subtitle { margin-top: 12px; font-size: 18px; opacity: 0.9; }
+
+        /* small fade-out animation */
+        .fade-out { animation: fadeOut 400ms ease forwards; }
+        @keyframes fadeOut { to { opacity: 0; visibility: hidden; } }
+
+        /* ensure canvas behind overlay */
+        #unity-canvas { position: absolute; width: 100%; height: 100%; left: 0; top: 0; }
+    </style>
+
+    <script>
+        // Force default language to English
+        document.documentElement.lang = 'en';
+
+        // Expose myGameInstance for SDK callbacks
+        var myGameInstance = null;
+    </script>
+</head>
+<body>
+
+    <!-- Custom purple loader shown immediately -->
+    <div id="custom-loader" aria-hidden="false">
+        <div class="title">Waterballz Gamezz</div>
+        <div class="subtitle">Loading… please wait</div>
+    </div>
+
+    <!-- Unity container & original loading UI (kept for progress but hidden) -->
+    <div id="unity-container">
+        <canvas id="unity-canvas" width="361" height="227"></canvas>
+
+        <div id="unity-loading-bar" style="display: none;">
+            <div id="unity-logo"><img src="https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/logo.png" alt="Granny Logo"></div>
+            <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full" style="width: 0%;"></div></div>
+        </div>
+        <div id="unity-warning"></div>
+    </div>
+
+    <script>
+        // Utility: merge multipart files (keeps original logic)
+        async function mergeUnityWebFiles(baseUrl, filePrefix, totalParts, extension) {
+            const partUrls = [];
+            for (let i = 1; i <= totalParts; i++) partUrls.push(`${baseUrl}/${filePrefix}_part${i}.${extension}`);
+
+            const buffers = [];
+            for (let i = 0; i < totalParts; i++) {
+                const response = await fetch(partUrls[i]);
+                if (!response.ok) throw new Error(`Failed to load part: ${partUrls[i]}`);
+                const buffer = await response.arrayBuffer();
+                buffers.push(buffer);
+
+                // update visible progress bar (even if hidden under overlay)
+                const progress = ((i + 1) / totalParts) * 50; // this merging step counts for first 50%
+                document.querySelector("#unity-progress-bar-full").style.width = `${progress}%`;
+            }
+
+            const totalLength = buffers.reduce((acc, buffer) => acc + buffer.byteLength, 0);
+            const combinedBuffer = new Uint8Array(totalLength);
+            let offset = 0;
+            buffers.forEach((buffer) => {
+                combinedBuffer.set(new Uint8Array(buffer), offset);
+                offset += buffer.byteLength;
+            });
+            return combinedBuffer.buffer || combinedBuffer;
+        }
+
+        // DOM refs
+        var canvas = document.querySelector('#unity-canvas');
+        var loadingBar = document.querySelector('#unity-loading-bar');
+        var progressBarFull = document.querySelector('#unity-progress-bar-full');
+        var warningBanner = document.querySelector('#unity-warning');
+        var customLoader = document.getElementById('custom-loader');
+        var isAdShown = false;
+
+        function unityShowBanner(msg, type) {
+            function updateBannerVisibility() { warningBanner.style.display = warningBanner.children.length ? 'block' : 'none'; }
+            var div = document.createElement('div');
+            div.innerHTML = msg;
+            warningBanner.appendChild(div);
+            if (type == 'error') div.style = 'background: red; padding: 10px;';
+            else { if (type == 'warning') div.style = 'background: yellow; padding: 10px;'; setTimeout(function() { warningBanner.removeChild(div); updateBannerVisibility(); }, 5000); }
+            updateBannerVisibility();
+        }
+
+        function showAdOnClick() {
+            if (!isAdShown && typeof sdk !== 'undefined' && typeof sdk.showBanner !== 'undefined') {
+                sdk.showBanner();
+                isAdShown = true;
+            }
+        }
+
+        var buildUrl = "https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/Build";
+        var loaderUrl = buildUrl + "/Granny.loader.js";
+
+        async function initializeGame() {
+            try {
+                // Merge data & wasm (keeps existing behavior) — these updates show progress
+                const dataBuffer = await mergeUnityWebFiles(buildUrl, "Granny", 2, "data");
+                const wasmBuffer = await mergeUnityWebFiles(buildUrl, "Granny", 2, "wasm");
+
+                // Create blob URLs so Unity loader can use in-memory files
+                const dataBlobUrl = URL.createObjectURL(new Blob([dataBuffer], { type: "application/octet-stream" }));
+                const wasmBlobUrl = URL.createObjectURL(new Blob([wasmBuffer], { type: "application/octet-stream" }));
+
+                var config = {
+                    dataUrl: dataBlobUrl,
+                    frameworkUrl: buildUrl + "/Granny.framework.js",
+                    codeUrl: wasmBlobUrl,
+                    streamingAssetsUrl: "https://cdn.jsdelivr.net/gh/gru6nny/ohd@main/StreamingAssets",
+                    companyName: "Anastasia Kazantseva",
+                    productName: "Granny",
+                    productVersion: "1.0",
+                    showBanner: unityShowBanner,
+                };
+
+                // Dynamically load the Unity loader script and create the instance
+                var script = document.createElement('script');
+                script.src = loaderUrl;
+                script.onload = function () {
+                    // Now create Unity instance. progress callback runs from 0..1
+                    createUnityInstance(canvas, config, function (progress) {
+                        // progress here represents the later Unity loading stage (0..1) — map to 50..100%
+                        var mapped = 50 + (progress * 50);
+                        progressBarFull.style.width = (mapped * 1) + "%";
+                    }).then(function (unityInstance) {
+                        myGameInstance = unityInstance;
+
+                        // Add pointer/touch handlers for ads as before
+                        canvas.addEventListener('pointerdown', showAdOnClick);
+                        canvas.addEventListener('touchstart', showAdOnClick);
+
+                        // Hide original unity loading bar (it was already hidden) and fade out our overlay
+                        loadingBar.style.display = 'none';
+
+                        // Fade out animation then remove overlay from DOM
+                        customLoader.classList.add('fade-out');
+                        setTimeout(function() { if (customLoader && customLoader.parentNode) customLoader.parentNode.removeChild(customLoader); }, 500);
+
+                    }).catch(function (message) {
+                        alert('Failed to start game: ' + message);
+                        console.error(message);
+                    });
+                };
+                document.body.appendChild(script);
+
+            } catch (error) {
+                console.error('Game initialization failed:', error);
+                unityShowBanner('Game failed to initialize. See console for details.','error');
+            }
+        }
+
+        // Start initialization as soon as possible
+        initializeGame();
+    </script>
+
+</body>
+</html>
